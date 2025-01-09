@@ -7,6 +7,8 @@ class GameConfig:
     max_bet = 1000
 
 class CountingConfig:
+    starting_stack = 20000
+    
     spread = {
         0: 25,
         1: 50,

@@ -1,7 +1,7 @@
 """Simulates a set of rounds of blackjack"""
 
 from shoe import Shoe
-from config import GameConfig
+from config import GameConfig, CountingConfig
 from count import Count
 from strategy import player_strategy
 
@@ -15,6 +15,8 @@ def hand_busted(player_hand: list):
 shoe = Shoe(GameConfig.decks_per_shoe, GameConfig.penetration)
 
 count = Count(GameConfig.decks_per_shoe)
+
+stack = CountingConfig.starting_stack
 
 for round in range(NUM_ROUNDS):
     if shoe.should_reshuffle():
@@ -40,6 +42,16 @@ for round in range(NUM_ROUNDS):
     
     # Choose our first decision
     player_hand = [player_first, player_second]
+    dealer_hand = [dealer_first, dealer_second]
+    
+    # Check for blackjack
+    if sorted(player_hand) == ["10", "A"]:
+        count.update(dealer_second)
+        if sorted(dealer_hand) != ["10", "A"]:
+            stack += bet * GameConfig.bj_payout
+        
+        continue
+        
     decision = player_strategy(player_hand, dealer_first, count)
     
     # Player section
