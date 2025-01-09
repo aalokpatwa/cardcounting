@@ -1,4 +1,5 @@
 from config import CountingConfig
+import math
 
 class Count:
     def __init__(self, decks):
@@ -9,7 +10,7 @@ class Count:
     def update(self, card):
         if card in ["2", "3","4", "5", "6"]:
             self.running_count += 1
-        elif card in ["10", "A"]:
+        elif card in ["10", "J", "Q", "K", "A"]:
             self.running_count -= 1
         
         self.decks_remaining -= 1 / 52.0
@@ -30,7 +31,10 @@ class Count:
         else:
             estimated_decks = round(self.decks_remaining * 4) / 4.0
         
-        return round(self.running_count / estimated_decks)
+        if self.running_count / estimated_decks < 0:
+            return 0
+        
+        return math.floor(self.running_count / estimated_decks)
     
     def get_bet(self):
         true_count = self.get_true_count()
