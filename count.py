@@ -1,4 +1,4 @@
-from config import CountingConfig
+from config import CountingConfig, BetLevel
 import math
 
 class Count:
@@ -36,7 +36,7 @@ class Count:
         
         return math.floor(self.running_count / estimated_decks)
     
-    def get_bet(self):
+    def get_bet(self) -> BetLevel:
         true_count = self.get_true_count()
         
         spread = CountingConfig.spread

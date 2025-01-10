@@ -13,7 +13,6 @@ class Shoe:
         for rank in range(2, 11):
             self.cards.extend([str(rank)] * 4 * self.num_decks)
             
-        self.cards.extend([str(10)] * 4 * self.num_decks)
         self.cards.extend([str("J")] * 4 * self.num_decks)
         self.cards.extend([str("Q")] * 4 * self.num_decks)
         self.cards.extend([str("K")] * 4 * self.num_decks)
