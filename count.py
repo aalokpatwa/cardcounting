@@ -8,6 +8,7 @@ class Count:
         self.decks_remaining = decks
     
     def update(self, card):
+        """ Updates the count based on the Hi-Lo approach """
         if card in ["2", "3","4", "5", "6"]:
             self.running_count += 1
         elif card in ["10", "J", "Q", "K", "A"]:
@@ -16,6 +17,7 @@ class Count:
         self.decks_remaining -= 1 / 52.0
     
     def reset(self):
+        """ Used to reset the count at the start of a new shoe """
         self.running_count = 0
         self.decks_remaining = self.total_decks
     
@@ -23,7 +25,7 @@ class Count:
         return self.running_count
 
     def get_true_count(self):
-        # In real counting situations, we must estimate the number
+        """ Estimates true count based on running count and decks remaining """
         if CountingConfig.deck_estimation == "full":
             estimated_decks = round(self.decks_remaining)
         elif CountingConfig.deck_estimation == "half":
@@ -31,12 +33,14 @@ class Count:
         else:
             estimated_decks = round(self.decks_remaining * 4) / 4.0
         
+        # Just treat all negative counts as 0-counts
         if self.running_count / estimated_decks < 0:
             return 0
         
         return math.floor(self.running_count / estimated_decks)
     
     def get_bet(self) -> BetLevel:
+        """ Uses calculated true count to determine bet level """
         true_count = self.get_true_count()
         
         spread = CountingConfig.spread

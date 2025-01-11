@@ -8,6 +8,7 @@ class Shoe:
         self.new_shoe()
     
     def new_shoe(self):
+        """ Generates a new shoe with the specified number of decks """
         self.cards = []
         
         for rank in range(2, 11):
@@ -22,18 +23,22 @@ class Shoe:
         self.shuffle()
     
     def should_reshuffle(self):
+        """ Determines whether we need to create a new shoe """
         return len(self.cards) < (1 - self.penetration) * self.num_decks * 52
     
     def is_empty(self):
+        """ Checks whether there are 0 cards left in the shoe """
         return len(self.cards) == 0
     
     def draw(self):
+        """ Draws a card from the shoe, without replacement """
         if self.is_empty():
             raise ValueError("Attempted to draw from an empty shoe")
         
         return self.cards.pop()
     
     def shuffle(self):
+        """ Shuffles the shoe """
         random.shuffle(self.cards)
         
     

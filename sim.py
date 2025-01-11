@@ -7,40 +7,42 @@ from strategy import player_strategy
 from hand import *
 from tqdm import tqdm
 
-NUM_EXPERIMENTS = 1
-NUM_ROUNDS = 1000000
+NUM_ROUNDS = int(1e6)
 
 def play_round(shoe, count, stack):
     """Play a single round of blackjack"""
+    
+    # If the shoe is past the cut card, start a new shoe and reset the count
     if shoe.should_reshuffle():
         shoe.new_shoe()
         count.reset()
     
+    # Based on the count, decide our bet level
     betLevel = count.get_bet()
     n_hands = betLevel.n_hands
     bet = betLevel.bet
     
+    # If we can't afford the bet indicated by spread, play one hand all-in
     if n_hands * bet > stack:
-        # If we can't afford the bet indicated by spread, play one hand all-in
         n_hands = 1
         bet = stack
     
-    hands = []
+    # Represent the set of hands the player is playing
+    hands: list[PlayerHand] = []
     
+    # Draw the first card for each player hand
     for hand in range(n_hands):
-        # Player gets their first card
         player_first = shoe.draw()
         count.update(player_first)
         
-        this_hand = PlayerHand([player_first])
-        
+        this_hand = PlayerHand([player_first], bet)
         hands.append(this_hand)
     
     # Dealer gets their first card, face-up
     dealer_first = shoe.draw()
     count.update(dealer_first)
     
-    # Player gets their second card
+    # Player hands get their second card
     for hand in range(n_hands):
         player_second = shoe.draw()
         count.update(player_second)
@@ -52,14 +54,17 @@ def play_round(shoe, count, stack):
     dealer_hand = [dealer_first, dealer_second]
     dealer_hand = convert_face(dealer_hand)
 
+    # Variable to track whether we have counted the dealer's second card yet
     counted_dealer_second = False
     
-    totals = []
-    
+    stood_hands: list[PlayerHand] = []
+        
     # Play each of the hands, in order
     while len(hands) > 0:
         # Pop the first hand from our queue
         this_hand = hands.pop(0)
+        
+        # Get the cards in this hand
         player_cards = this_hand.get_cards()
         player_cards = convert_face(player_cards)
         
@@ -69,40 +74,41 @@ def play_round(shoe, count, stack):
                 count.update(dealer_second)
                 counted_dealer_second = True
             if sorted(dealer_hand) != ["10", "A"]:                
-                # Don't count blackjack payout if we had split to get blackjack
+                # If this was not a previously splitted hand, we get the BJ payout
                 if not this_hand.can_split():
-                    stack += bet * GameConfig.bj_payout
+                    stack += this_hand.get_bet() * GameConfig.bj_payout
+                # Otherwise, we just get 1x payout
                 else:
-                    stack += bet
-            continue
+                    stack += this_hand.get_bet()
+            continue # This hand is over and we have registered the win
         
-        # Check for dealer blackjack
+        # Check for dealer blackjack which is an auto-loss
         if sorted(dealer_hand) == ["10", "A"]:
             if not counted_dealer_second:
                 count.update(dealer_second)
                 counted_dealer_second = True
-            stack -= bet
-            continue
+            stack -= this_hand.get_bet()
+            continue # This hand is over and we have registered the loss
         
         # Might be some hands that we are not allowed to hit (e.g. split aces)
         if not this_hand.can_hit():
-            decision = "S"
+            decision = "S" # This hand is forced to stand
         else:
             # Otherwise, we can do whatever we want
             decision = player_strategy(player_cards, dealer_first, this_hand.can_split(), this_hand.can_split())
                 
         # Playing each hand
         while decision != "S":
-            # Decision was to double: draw one card and stand
+            # Decision was to double: double the money on this hand, draw one card and stand
             if decision == "D":
-                bet *= 2
+                this_hand.set_bet(this_hand.get_bet() * 2)
                 new_card = shoe.draw()
                 count.update(new_card)   
                 player_cards.append(new_card)
                 player_cards = convert_face(player_cards)
                 break
             
-            # Decision was to split: draw one card for each hand and add back
+            # Decision was to split: draw one card for each hand and add back to the queue
             elif decision == "P":
                 first_cards = [player_cards[0]]
                 new_card = shoe.draw()
@@ -127,7 +133,7 @@ def play_round(shoe, count, stack):
                 
                 break      
             
-            # Otherwise, player wants to hit this hand
+            # Otherwise, hit the hand and keep going unless we bust
             else:
                 new_card = shoe.draw()
                 count.update(new_card)
@@ -143,21 +149,22 @@ def play_round(shoe, count, stack):
         if decision == "P":
             continue
         
-        # Otherwise, check for a bust
+        # Otherwise, double-check for a bust
         if hand_busted(player_cards):
-            stack -= bet
+            stack -= this_hand.get_bet()
             continue
         
         # If no bust, store the total
         total = get_highest_total(player_cards)
-        totals.append(total)
+        this_hand.set_total(total)
+        stood_hands.append(this_hand)
     
-    # Dealer play section
+    # Now, look at the dealer's second card
     if not counted_dealer_second:
         count.update(dealer_second)
         counted_dealer_second = True
     
-    # Dealer hits until they get above a 17
+    # Dealer play -- stand after 17
     while get_highest_total(dealer_hand) < 17:
         
         # Dealer can only hit a soft 17. Stands on hard 17
@@ -169,7 +176,8 @@ def play_round(shoe, count, stack):
         
         dealer_hand.append(new_card)
         dealer_hand = convert_face(dealer_hand)
-        
+    
+    # Check whether dealer currently has soft 17 -- hit if H17
     if GameConfig.h17 and (get_highest_total(dealer_hand) == 17) and ("A" in dealer_hand):
         new_card = shoe.draw()
         count.update(new_card)
@@ -177,12 +185,12 @@ def play_round(shoe, count, stack):
         dealer_hand.append(new_card)
         dealer_hand = convert_face(dealer_hand)
             
-    # Player wins if dealer
-    for total in totals:
-        if get_highest_total(dealer_hand) > 21 or get_highest_total(dealer_hand) < total:
-            stack += bet
-        elif get_highest_total(dealer_hand) > total:
-            stack -= bet
+    # Check player hands' win/losses
+    for hand in stood_hands:
+        if get_highest_total(dealer_hand) > 21 or get_highest_total(dealer_hand) < hand.get_total():
+            stack += this_hand.get_bet()
+        elif get_highest_total(dealer_hand) > hand.get_total():
+            stack -= this_hand.get_bet()
 
     return stack
 
@@ -193,31 +201,33 @@ def run_simulation():
     stack = CountingConfig.starting_stack
     shoes = 0
     ruins = 0
+
+    shoes = 0
+    stack = CountingConfig.starting_stack
     
-    avs = []
-
-    for experiment in tqdm(range(NUM_EXPERIMENTS)):
-        shoes = 0
-        stack = CountingConfig.starting_stack
-        for round_no in range(NUM_ROUNDS):
-            if stack < GameConfig.min_bet:
-                ruins += 1
-                stack = CountingConfig.starting_stack
+    for round_no in tqdm(range(NUM_ROUNDS)):
+        if stack < GameConfig.min_bet:
+            ruins += 1
+            stack = CountingConfig.starting_stack
             
-            stack = play_round(shoe, count, stack)
-            
-            if shoe.should_reshuffle():
-                shoes += 1
-                shoe.new_shoe()
-                count.reset()
+        if shoe.should_reshuffle():
+            shoes += 1
+            shoe.new_shoe()
+            count.reset()
         
-        hours_taken = (NUM_ROUNDS * GameConfig.seconds_per_round / 3600) + (shoes * GameConfig.seconds_per_shuffle / 3600)
-        winnings = (stack - CountingConfig.starting_stack) / hours_taken
-        avs.append(winnings)
+        stack = play_round(shoe, count, stack)
+    
+    # Measure the number of hours this would have taken
+    hours_taken = (NUM_ROUNDS * GameConfig.seconds_per_round / 3600) + (shoes * GameConfig.seconds_per_shuffle / 3600)
+    
+    # Calculate the average winnings per hour
+    evs = (stack - CountingConfig.starting_stack) / hours_taken
 
-    return sum(avs) / len(avs)
+    return evs, shoes, ruins
 
 if __name__ == "__main__":
-    ev = run_simulation()
+    ev, shoes, ruins = run_simulation()
     print (f"EV: {ev}")
+    print (f"Shoes: {shoes}")
+    print (f"Ruins: {ruins}")
 
